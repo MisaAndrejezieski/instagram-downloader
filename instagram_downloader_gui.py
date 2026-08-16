@@ -11,7 +11,7 @@ import instaloader
 # 👤 SEUS DADOS AQUI - FIXOS NO CÓDIGO
 # ============================================
 USUARIO_INSTAGRAM = "misaelandrejezieski"
-SENHA_INSTAGRAM = "SUA_SENHA_AQUI"  # <-- COLOCA SUA SENHA AQUI
+SENHA_INSTAGRAM = "#Sonho1313"
 
 class InstagramDownloader:
     def __init__(self, root):
