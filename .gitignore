@@ -1,0 +1,45 @@
+# Ambiente virtual
+.venv/
+venv/
+ENV/
+env/
+.env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Downloads do Instagram
+downloads/
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.gif
+*.webp
+*.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.tmp
+*.temp
+*.cache
+
+# PyInstaller
+*.spec
