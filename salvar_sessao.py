@@ -1,7 +1,7 @@
 import instaloader
 
 USUARIO = "misaelandrejezieski"
-SENHA = "SUA_SENHA_AQUI"  # <-- COLOCA SUA SENHA
+SENHA = "#Sonho1313"  # <-- COLOCA SUA SENHA
 
 L = instaloader.Instaloader()
 L.login(USUARIO, SENHA)
