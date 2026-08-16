@@ -1,17 +1,18 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
-import instaloader
-import threading
 import os
 import re
+import threading
+import tkinter as tk
 from datetime import datetime
+from tkinter import filedialog, messagebox, scrolledtext, ttk
+
+import instaloader
 from instaloader import ConnectionException, LoginRequiredException
 
 # ============================================
 # 👤 SEUS DADOS
 # ============================================
 USUARIO_INSTAGRAM = "misaelandrejezieski"
-SENHA_INSTAGRAM = "SUA_SENHA_AQUI"  # <-- COLOCA SUA SENHA AQUI
+SENHA_INSTAGRAM = "#Sonho1313"
 
 class InstagramDownloader:
     def __init__(self, root):
