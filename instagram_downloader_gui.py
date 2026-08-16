@@ -11,7 +11,7 @@ import instaloader
 class InstagramDownloader:
     def __init__(self, root):
         self.root = root
-        self.root.title("📸 Baixador do Instagram")
+        self.root.title("📸 Baixador do Instagram (v2)")
         self.root.geometry("700x600")
         self.root.configure(bg='#1a1a2e')
         
@@ -27,10 +27,20 @@ class InstagramDownloader:
         main.pack(fill=tk.BOTH, expand=True, padx=30, pady=20)
         
         tk.Label(main, text="Link do Post:", bg='#1a1a2e', fg='white').pack(anchor='w')
-        self.url_entry = tk.Entry(main, bg='#2a2a4a', fg='white', insertbackground='white', font=("Segoe UI", 11))
-        self.url_entry.pack(fill=tk.X, pady=(0, 10))
+        
+        # --- INPUT + BOTÃO DE LIMPAR (X) ---
+        input_frame = tk.Frame(main, bg='#1a1a2e')
+        input_frame.pack(fill=tk.X, pady=(0, 10))
+
+        self.url_entry = tk.Entry(input_frame, bg='#2a2a4a', fg='white', insertbackground='white', font=("Segoe UI", 11))
+        self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         self.url_entry.insert(0, "https://www.instagram.com/p/...")
         
+        # Botão Limpar (X)
+        self.clear_btn = tk.Button(input_frame, text="✕", command=self.limpar_url, bg='#ff4444', fg='white', relief='flat', width=3, cursor='hand2')
+        self.clear_btn.pack(side=tk.RIGHT, padx=(5, 0))
+        
+        # --- PASTA ---
         frame_pasta = tk.Frame(main, bg='#1a1a2e')
         frame_pasta.pack(fill=tk.X, pady=(0, 10))
         
@@ -39,18 +49,22 @@ class InstagramDownloader:
         self.pasta_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 5))
         self.pasta_entry.insert(0, "downloads")
         
-        tk.Button(frame_pasta, text="📂", command=self.escolher_pasta, bg='#2a2a4a', fg='white', relief='flat').pack(side=tk.RIGHT)
+        tk.Button(frame_pasta, text="📂", command=self.escolher_pasta, bg='#2a2a4a', fg='white', relief='flat', cursor='hand2').pack(side=tk.RIGHT)
         
+        # --- BOTÃO BAIXAR ---
         self.download_btn = tk.Button(main, text="⬇️ BAIXAR", command=self.iniciar_download, bg='#e1306c', fg='white', font=("Segoe UI", 12, "bold"), relief='flat', cursor='hand2')
         self.download_btn.pack(fill=tk.X, pady=10)
         
+        # --- LOG ---
         self.log_text = scrolledtext.ScrolledText(main, bg='#0d0d1a', fg='#00ff88', font=("Consolas", 10), height=12)
         self.log_text.pack(fill=tk.BOTH, expand=True)
         self.log_text.config(state=tk.DISABLED)
         
-        self.log("🚀 Aplicação iniciada! (Modo sem login automático)")
+        self.log("🚀 Aplicação iniciada! (Enter funciona)")    
         self.log("📌 Cole o link do post ou reels e clique em Baixar.")
-        self.log("⚠️ ATENÇÃO: Só funciona para perfis PÚBLICOS.")
+        
+        # --- EVENTO DE TECLA ENTER ---
+        self.url_entry.bind('<Return>', self.evento_enter)
         
     def log(self, msg):
         self.log_text.config(state=tk.NORMAL)
@@ -58,6 +72,13 @@ class InstagramDownloader:
         self.log_text.see(tk.END)
         self.log_text.config(state=tk.DISABLED)
         self.root.update()
+    
+    def limpar_url(self):
+        self.url_entry.delete(0, tk.END)
+        self.url_entry.focus()
+
+    def evento_enter(self, event):
+        self.iniciar_download()
     
     def escolher_pasta(self):
         pasta = filedialog.askdirectory()
@@ -68,12 +89,12 @@ class InstagramDownloader:
     def iniciar_download(self):
         url = self.url_entry.get().strip()
         if not url or url == "https://www.instagram.com/p/...":
-            messagebox.showwarning("Aviso", "Cole um link válido!")
+            self.log("⚠️ Cole um link válido!")
             return
         
         shortcode = re.search(r'instagram\.com/(p|reel|tv)/([A-Za-z0-9_-]+)', url)
         if not shortcode:
-            messagebox.showerror("Erro", "URL inválida!")
+            self.log("❌ URL inválida!")
             return
         
         shortcode = shortcode.group(2)
@@ -90,8 +111,10 @@ class InstagramDownloader:
                 post = instaloader.Post.from_shortcode(self.loader.context, shortcode)
                 self.loader.dirname_pattern = pasta
                 self.loader.download_post(post, target=pasta)
-                self.log("✅ Download concluído!")
-                messagebox.showinfo("Sucesso", "Download concluído!")
+                
+                # Caixa de OK removida, só avisa no log
+                self.log("✅ Download concluído com sucesso!")
+                
             except instaloader.exceptions.LoginRequiredException:
                 self.log("❌ ERRO: O perfil é PRIVADO. O programa não está logado.")
                 messagebox.showerror("Erro", "Perfil privado. Este programa não está logado.")
