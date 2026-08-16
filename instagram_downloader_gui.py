@@ -1,17 +1,17 @@
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox, scrolledtext
+import instaloader
+import threading
 import os
 import re
-import threading
-import tkinter as tk
 from datetime import datetime
-from tkinter import filedialog, messagebox, scrolledtext, ttk
-
-import instaloader
+from instaloader import ConnectionException, LoginRequiredException
 
 # ============================================
-# 👤 SEUS DADOS AQUI - FIXOS NO CÓDIGO
+# 👤 SEUS DADOS
 # ============================================
 USUARIO_INSTAGRAM = "misaelandrejezieski"
-SENHA_INSTAGRAM = "#Sonho1313"
+SENHA_INSTAGRAM = "SUA_SENHA_AQUI"  # <-- COLOCA SUA SENHA AQUI
 
 class InstagramDownloader:
     def __init__(self, root):
@@ -26,13 +26,13 @@ class InstagramDownloader:
         
         self.criar_interface()
         
-        # 🔥 FAZ LOGIN AUTOMÁTICO AO ABRIR
+        # Tenta login automático
         self.root.after(500, self.login_automatico)
         
     def login_automatico(self):
-        """Tenta carregar sessão salva, se não tiver, faz login com senha fixa"""
+        """Login automático usando cookies ou sessão salva"""
         
-        # Primeiro tenta carregar sessão salva
+        # 1. Tenta carregar sessão salva
         try:
             self.loader.load_session_from_file(USUARIO_INSTAGRAM)
             self.logado = True
@@ -41,11 +41,23 @@ class InstagramDownloader:
             self.log("📥 Pronto para baixar!")
             return
         except:
-            self.log("⭕ Nenhuma sessão salva encontrada")
+            pass
         
-        # Se não tem sessão, faz login com a senha fixa
+        # 2. Tenta usar cookies do navegador (Edge/Chrome)
+        try:
+            self.log("🍪 Tentando usar cookies do navegador...")
+            self.loader.load_session_from_file(USUARIO_INSTAGRAM, filename="session")
+            self.logado = True
+            self.status_login.config(text="✅ Logado!", fg='#25d366')
+            self.log("✅ Sessão carregada do navegador!")
+            self.log("📥 Pronto para baixar!")
+            return
+        except:
+            pass
+        
+        # 3. Se não tem sessão, faz login com senha
         if not SENHA_INSTAGRAM:
-            self.log("❌ Senha não configurada no código!")
+            self.log("❌ Senha não configurada!")
             self.log("📌 Coloque sua senha em SENHA_INSTAGRAM")
             return
         
@@ -54,41 +66,39 @@ class InstagramDownloader:
                 self.log(f"🔐 Login automático como {USUARIO_INSTAGRAM}...")
                 self.loader.login(USUARIO_INSTAGRAM, SENHA_INSTAGRAM)
                 self.logado = True
-                
-                # Salva sessão para não precisar logar de novo
                 self.loader.save_session_to_file()
-                
                 self.status_login.config(text="✅ Logado!", fg='#25d366')
                 self.log("✅ Login automático realizado com sucesso!")
-                self.log("💾 Sessão salva para próximas execuções!")
+                self.log("💾 Sessão salva!")
                 self.log("📥 Pronto para baixar!")
-                
-                self.root.after(0, lambda: messagebox.showinfo(
-                    "Sucesso!",
-                    f"Login automático realizado!\nUsuário: @{USUARIO_INSTAGRAM}"
-                ))
+                messagebox.showinfo("Sucesso", f"Login automático realizado!\n@{
+USUARIO_INSTAGRAM}")
                 
             except Exception as e:
                 erro = str(e)
-                self.log(f"❌ Erro no login automático: {erro}")
+                self.log(f"❌ Erro: {erro}")
                 self.status_login.config(text="❌ Falha", fg='#ff6b6b')
                 
-                # Se for checkpoint, mostra o link
                 if "Checkpoint" in erro:
-                    # Extrai o link do erro
                     match = re.search(r'/auth_platform/\?apc=[^\s]+', erro)
                     if match:
                         link = f"https://www.instagram.com{match.group(0)}"
                         self.log(f"🔗 Abra no navegador e confirme:")
                         self.log(f"{link}")
+                        
+                        # Copia o link pra área de transferência
+                        self.root.clipboard_clear()
+                        self.root.clipboard_append(link)
+                        self.log("📋 Link copiado para a área de transferência!")
+                        
                         self.root.after(0, lambda: messagebox.showwarning(
                             "Checkpoint necessário",
-                            f"O Instagram pediu confirmação.\n\nAbra este link no navegador:\n{link}\n\nDepois clique em Logar."
+                            f"O link foi copiado para sua área de transferência!\n\nCole no navegador e confirme.\n\nDepois clique em 'OK' e tente novamente."
                         ))
                 else:
                     self.root.after(0, lambda: messagebox.showerror(
                         "Erro no login",
-                        f"Falha no login automático:\n{erro}"
+                        f"{erro}"
                     ))
         
         threading.Thread(target=thread_login, daemon=True).start()
@@ -115,7 +125,6 @@ class InstagramDownloader:
         main_frame = tk.Frame(self.root, bg='#1a1a2e')
         main_frame.pack(fill=tk.BOTH, expand=True, padx=30)
         
-        # ========== ÁREA DE LOGIN ==========
         login_frame = tk.LabelFrame(
             main_frame,
             text="🔐 Status do Login",
@@ -166,7 +175,6 @@ class InstagramDownloader:
         )
         self.status_login.pack(side=tk.LEFT, padx=(15, 0))
         
-        # ========== ÁREA DO LINK ==========
         link_frame = tk.LabelFrame(
             main_frame,
             text="📎 Link do post ou perfil",
@@ -201,7 +209,6 @@ class InstagramDownloader:
         )
         self.download_btn.pack(fill=tk.X)
         
-        # ========== OPÇÕES ==========
         options_frame = tk.Frame(main_frame, bg='#1a1a2e')
         options_frame.pack(fill=tk.X, pady=(0, 10))
         
@@ -233,7 +240,6 @@ class InstagramDownloader:
             cursor="hand2"
         ).pack(side=tk.LEFT)
         
-        # ========== LOG ==========
         log_frame = tk.LabelFrame(
             main_frame,
             text="📋 Log",
@@ -275,7 +281,6 @@ class InstagramDownloader:
             self.log(f"📁 Pasta alterada: {pasta}")
     
     def fazer_login_manual(self):
-        """Login manual (caso o automático falhe)"""
         usuario = self.user_entry.get().strip()
         senha = self.pass_entry.get().strip()
         
@@ -294,7 +299,7 @@ class InstagramDownloader:
                 self.log("💾 Sessão salva!")
                 messagebox.showinfo("Sucesso", "Login realizado com sucesso!")
             except Exception as e:
-                self.log(f"❌ Erro no login: {str(e)}")
+                self.log(f"❌ Erro: {str(e)}")
                 self.status_login.config(text="❌ Falha", fg='#ff6b6b')
                 messagebox.showerror("Erro", f"Falha no login:\n{str(e)}")
         
@@ -306,7 +311,6 @@ class InstagramDownloader:
             r'instagram\.com/reel/([A-Za-z0-9_-]+)',
             r'instagram\.com/tv/([A-Za-z0-9_-]+)'
         ]
-        
         for padrao in padroes:
             match = re.search(padrao, url)
             if match:
@@ -336,11 +340,11 @@ class InstagramDownloader:
             self.log(f"✅ Perfil completo baixado! Total: {count} posts")
             return True
             
-        except instaloader.exceptions.LoginRequiredException:
+        except LoginRequiredException:
             self.log("❌ Perfil privado! Faça login para acessar.")
             return False
         except Exception as e:
-            self.log(f"❌ Erro ao baixar perfil: {str(e)}")
+            self.log(f"❌ Erro: {str(e)}")
             return False
     
     def iniciar_download(self):
@@ -391,7 +395,7 @@ class InstagramDownloader:
                     f"Download concluído!\n📁 Pasta: {pasta}\n📊 Tipo: {post.typename}"
                 ))
                 
-            except instaloader.exceptions.LoginRequiredException:
+            except LoginRequiredException:
                 self.log("❌ Conteúdo privado! Faça login para acessar.")
                 self.root.after(0, lambda: messagebox.showwarning(
                     "Login necessário",
