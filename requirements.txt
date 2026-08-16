@@ -1,3 +1,1 @@
-customtkinter>=5.2.0
 yt-dlp>=2024.4.9
-instaloader>=4.11.0
