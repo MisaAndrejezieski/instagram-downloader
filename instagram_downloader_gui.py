@@ -8,10 +8,10 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 import instaloader
 
 # ============================================
-# SEU USUÁRIO AQUI - FIXO NO CÓDIGO
+# 👤 SEUS DADOS AQUI - FIXOS NO CÓDIGO
 # ============================================
 USUARIO_INSTAGRAM = "misaelandrejezieski"
-SENHA_INSTAGRAM = ""  # VOCÊ DIGITA NA INTERFACE
+SENHA_INSTAGRAM = "SUA_SENHA_AQUI"  # <-- COLOCA SUA SENHA AQUI
 
 class InstagramDownloader:
     def __init__(self, root):
@@ -26,8 +26,74 @@ class InstagramDownloader:
         
         self.criar_interface()
         
+        # 🔥 FAZ LOGIN AUTOMÁTICO AO ABRIR
+        self.root.after(500, self.login_automatico)
+        
+    def login_automatico(self):
+        """Tenta carregar sessão salva, se não tiver, faz login com senha fixa"""
+        
+        # Primeiro tenta carregar sessão salva
+        try:
+            self.loader.load_session_from_file(USUARIO_INSTAGRAM)
+            self.logado = True
+            self.status_login.config(text="✅ Logado!", fg='#25d366')
+            self.log("✅ Sessão carregada automaticamente!")
+            self.log("📥 Pronto para baixar!")
+            return
+        except:
+            self.log("⭕ Nenhuma sessão salva encontrada")
+        
+        # Se não tem sessão, faz login com a senha fixa
+        if not SENHA_INSTAGRAM:
+            self.log("❌ Senha não configurada no código!")
+            self.log("📌 Coloque sua senha em SENHA_INSTAGRAM")
+            return
+        
+        def thread_login():
+            try:
+                self.log(f"🔐 Login automático como {USUARIO_INSTAGRAM}...")
+                self.loader.login(USUARIO_INSTAGRAM, SENHA_INSTAGRAM)
+                self.logado = True
+                
+                # Salva sessão para não precisar logar de novo
+                self.loader.save_session_to_file()
+                
+                self.status_login.config(text="✅ Logado!", fg='#25d366')
+                self.log("✅ Login automático realizado com sucesso!")
+                self.log("💾 Sessão salva para próximas execuções!")
+                self.log("📥 Pronto para baixar!")
+                
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "Sucesso!",
+                    f"Login automático realizado!\nUsuário: @{USUARIO_INSTAGRAM}"
+                ))
+                
+            except Exception as e:
+                erro = str(e)
+                self.log(f"❌ Erro no login automático: {erro}")
+                self.status_login.config(text="❌ Falha", fg='#ff6b6b')
+                
+                # Se for checkpoint, mostra o link
+                if "Checkpoint" in erro:
+                    # Extrai o link do erro
+                    match = re.search(r'/auth_platform/\?apc=[^\s]+', erro)
+                    if match:
+                        link = f"https://www.instagram.com{match.group(0)}"
+                        self.log(f"🔗 Abra no navegador e confirme:")
+                        self.log(f"{link}")
+                        self.root.after(0, lambda: messagebox.showwarning(
+                            "Checkpoint necessário",
+                            f"O Instagram pediu confirmação.\n\nAbra este link no navegador:\n{link}\n\nDepois clique em Logar."
+                        ))
+                else:
+                    self.root.after(0, lambda: messagebox.showerror(
+                        "Erro no login",
+                        f"Falha no login automático:\n{erro}"
+                    ))
+        
+        threading.Thread(target=thread_login, daemon=True).start()
+    
     def criar_interface(self):
-        # Título
         titulo = tk.Label(
             self.root,
             text="📸 Baixador do Instagram",
@@ -39,7 +105,7 @@ class InstagramDownloader:
         
         subtitulo = tk.Label(
             self.root,
-            text=f"Logado como: @{USUARIO_INSTAGRAM}",
+            text=f"👤 @{USUARIO_INSTAGRAM}  |  Login automático ativado",
             font=("Segoe UI", 10),
             bg='#1a1a2e',
             fg='#25d366'
@@ -52,7 +118,7 @@ class InstagramDownloader:
         # ========== ÁREA DE LOGIN ==========
         login_frame = tk.LabelFrame(
             main_frame,
-            text="🔐 Login (necessário para perfis privados)",
+            text="🔐 Status do Login",
             font=("Segoe UI", 10, "bold"),
             bg='#16213e',
             fg='#ffffff',
@@ -61,7 +127,6 @@ class InstagramDownloader:
         )
         login_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # Usuário fixo (só leitura)
         row1 = tk.Frame(login_frame, bg='#16213e')
         row1.pack(fill=tk.X, pady=(0, 5))
         
@@ -71,18 +136,19 @@ class InstagramDownloader:
         self.user_entry.config(state='readonly')
         self.user_entry.pack(side=tk.LEFT, padx=(0, 10))
         
-        # Senha
         row2 = tk.Frame(login_frame, bg='#16213e')
         row2.pack(fill=tk.X)
         
         tk.Label(row2, text="Senha:", bg='#16213e', fg='#ffffff', width=10, anchor='w').pack(side=tk.LEFT)
         self.pass_entry = tk.Entry(row2, width=25, show="*", bg='#2a2a4a', fg='white', insertbackground='white')
+        if SENHA_INSTAGRAM:
+            self.pass_entry.insert(0, SENHA_INSTAGRAM)
         self.pass_entry.pack(side=tk.LEFT, padx=(0, 10))
         
         self.login_btn = tk.Button(
             row2,
             text="🔑 Logar",
-            command=self.fazer_login,
+            command=self.fazer_login_manual,
             bg='#25d366',
             fg='white',
             font=("Segoe UI", 9, "bold"),
@@ -93,9 +159,9 @@ class InstagramDownloader:
         
         self.status_login = tk.Label(
             row2,
-            text="⭕ Deslogado",
+            text="⏳ Conectando...",
             bg='#16213e',
-            fg='#ff6b6b',
+            fg='#ffaa00',
             font=("Segoe UI", 9)
         )
         self.status_login.pack(side=tk.LEFT, padx=(15, 0))
@@ -123,7 +189,6 @@ class InstagramDownloader:
         self.url_entry.insert(0, "https://www.instagram.com/p/...")
         self.url_entry.bind("<FocusIn>", lambda e: self.url_entry.delete(0, tk.END) if self.url_entry.get() == "https://www.instagram.com/p/..." else None)
         
-        # Botão baixar
         self.download_btn = tk.Button(
             link_frame,
             text="⬇️ BAIXAR",
@@ -192,9 +257,9 @@ class InstagramDownloader:
         self.log_text.config(state=tk.DISABLED)
         
         self.log("🚀 Aplicação iniciada!")
-        self.log(f"👤 Usuário configurado: @{USUARIO_INSTAGRAM}")
-        self.log("📌 Digite a senha e clique em Logar")
-        
+        self.log(f"👤 Usuário: @{USUARIO_INSTAGRAM}")
+        self.log("🔄 Tentando login automático...")
+    
     def log(self, mensagem):
         self.log_text.config(state=tk.NORMAL)
         timestamp = datetime.now().strftime("%H:%M:%S")
@@ -209,7 +274,8 @@ class InstagramDownloader:
             self.var_pasta.set(pasta)
             self.log(f"📁 Pasta alterada: {pasta}")
     
-    def fazer_login(self):
+    def fazer_login_manual(self):
+        """Login manual (caso o automático falhe)"""
         usuario = self.user_entry.get().strip()
         senha = self.pass_entry.get().strip()
         
@@ -222,9 +288,10 @@ class InstagramDownloader:
                 self.log(f"🔐 Tentando login como {usuario}...")
                 self.loader.login(usuario, senha)
                 self.logado = True
+                self.loader.save_session_to_file()
                 self.status_login.config(text="✅ Logado!", fg='#25d366')
                 self.log("✅ Login realizado com sucesso!")
-                self.log("📥 Agora você pode baixar posts de qualquer perfil!")
+                self.log("💾 Sessão salva!")
                 messagebox.showinfo("Sucesso", "Login realizado com sucesso!")
             except Exception as e:
                 self.log(f"❌ Erro no login: {str(e)}")
@@ -258,10 +325,7 @@ class InstagramDownloader:
         
         try:
             perfil = instaloader.Profile.from_username(self.loader.context, usuario)
-            
             self.log(f"📊 Posts: {perfil.mediacount}")
-            self.log(f"👥 Seguidores: {perfil.followers}")
-            self.log(f"📸 Seguindo: {perfil.followees}")
             
             count = 0
             for post in perfil.get_posts():
@@ -291,10 +355,8 @@ class InstagramDownloader:
             os.makedirs(pasta)
             self.log(f"📁 Pasta criada: {pasta}")
         
-        # Verifica se é um perfil
         usuario = self.extrair_usuario(url)
         if usuario and not re.search(r'/p/|/reel/|/tv/', url):
-            # É um perfil
             self.download_btn.config(state=tk.DISABLED, text="⏳ Baixando perfil...")
             
             def thread_perfil():
@@ -306,7 +368,6 @@ class InstagramDownloader:
             threading.Thread(target=thread_perfil, daemon=True).start()
             return
         
-        # Se não for perfil, tenta baixar post único
         shortcode = self.extrair_shortcode(url)
         if not shortcode:
             messagebox.showerror("Erro", "URL inválida!\nUse:\n- instagram.com/p/...\n- instagram.com/reel/...")
@@ -346,7 +407,6 @@ class InstagramDownloader:
         
         threading.Thread(target=download_thread, daemon=True).start()
 
-# ========== MAIN ==========
 if __name__ == "__main__":
     root = tk.Tk()
     app = InstagramDownloader(root)
