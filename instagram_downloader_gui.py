@@ -1,25 +1,27 @@
 import os
 import re
+import subprocess
+import sys
+import tempfile
 import threading
 import tkinter as tk
 from datetime import datetime
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+from tkinter import filedialog, messagebox, scrolledtext
 
 import instaloader
-from instaloader import ConnectionException, LoginRequiredException
 
 # ============================================
-# 👤 SEUS DADOS
+# 👤 SEUS DADOS - SÓ ALTERE A SENHA AQUI
 # ============================================
-USUARIO_INSTAGRAM = "misaelandrejezieski"
-SENHA_INSTAGRAM = "#Sonho1313"
+USUARIO = "misaelandrejezieski"
+SENHA = "#Sonho1313" # <--- COLOQUE SUA SENHA AQUI, COM AS ASPAS
+# ============================================
 
 class InstagramDownloader:
     def __init__(self, root):
         self.root = root
         self.root.title("📸 Baixador do Instagram")
-        self.root.geometry("700x650")
-        self.root.resizable(False, False)
+        self.root.geometry("700x600")
         self.root.configure(bg='#1a1a2e')
         
         self.loader = instaloader.Instaloader()
@@ -27,390 +29,171 @@ class InstagramDownloader:
         
         self.criar_interface()
         
-        # Tenta login automático
-        self.root.after(500, self.login_automatico)
-        
-    def login_automatico(self):
-        """Login automático usando cookies ou sessão salva"""
-        
-        # 1. Tenta carregar sessão salva
-        try:
-            self.loader.load_session_from_file(USUARIO_INSTAGRAM)
-            self.logado = True
-            self.status_login.config(text="✅ Logado!", fg='#25d366')
-            self.log("✅ Sessão carregada automaticamente!")
-            self.log("📥 Pronto para baixar!")
-            return
-        except:
-            pass
-        
-        # 2. Tenta usar cookies do navegador (Edge/Chrome)
-        try:
-            self.log("🍪 Tentando usar cookies do navegador...")
-            self.loader.load_session_from_file(USUARIO_INSTAGRAM, filename="session")
-            self.logado = True
-            self.status_login.config(text="✅ Logado!", fg='#25d366')
-            self.log("✅ Sessão carregada do navegador!")
-            self.log("📥 Pronto para baixar!")
-            return
-        except:
-            pass
-        
-        # 3. Se não tem sessão, faz login com senha
-        if not SENHA_INSTAGRAM:
-            self.log("❌ Senha não configurada!")
-            self.log("📌 Coloque sua senha em SENHA_INSTAGRAM")
-            return
-        
+        # Tenta carregar do Edge automaticamente, ou salva a sessão
+        self.root.after(500, self.login_automatico_ou_salvar)
+    
+    def login_automatico_ou_salvar(self):
         def thread_login():
             try:
-                self.log(f"🔐 Login automático como {USUARIO_INSTAGRAM}...")
-                self.loader.login(USUARIO_INSTAGRAM, SENHA_INSTAGRAM)
-                self.logado = True
-                self.loader.save_session_to_file()
-                self.status_login.config(text="✅ Logado!", fg='#25d366')
-                self.log("✅ Login automático realizado com sucesso!")
-                self.log("💾 Sessão salva!")
-                self.log("📥 Pronto para baixar!")
-                messagebox.showinfo("Sucesso", f"Login automático realizado!\n@{
-USUARIO_INSTAGRAM}")
+                self.log("🔐 Tentando login com sessão salva ou navegador...")
                 
+                # 1. Tenta carregar sessão salva (se já rodou antes)
+                try:
+                    self.loader.load_session_from_file(USUARIO)
+                    self.logado = True
+                    self.status_login.config(text="✅ Logado! (Sessão)", fg='#25d366')
+                    self.log("✅ Sessão carregada com sucesso!")
+                    return
+                except:
+                    pass
+
+                # 2. Tenta importar sessão do Edge (AQUI ESTÁ A MÁGICA)
+                try:
+                    self.log("🍪 Importando cookies do Microsoft Edge...")
+                    # Usa o navegador padrão do Windows para pegar os cookies do Instagram
+                    self.loader.import_session_from_browser("edge")
+                    self.logado = True
+                    self.loader.save_session_to_file(USUARIO) # Salva para não precisar repetir
+                    self.status_login.config(text="✅ Logado! (Edge)", fg='#25d366')
+                    self.log("✅ Sessão importada do Microsoft Edge!")
+                    return
+                except:
+                    pass
+
+                # 3. Se não tiver sessão e não conseguir importar do Edge, faz o login com senha
+                if SENHA:
+                    self.log(f"🔐 Fazendo login com senha para {USUARIO}...")
+                    self.loader.login(USUARIO, SENHA)
+                    self.loader.save_session_to_file(USUARIO)
+                    self.logado = True
+                    self.status_login.config(text="✅ Logado!", fg='#25d366')
+                    self.log("✅ Login com senha realizado com sucesso!")
+                else:
+                    self.log("❌ Falha: Nenhuma sessão, senha não configurada.")
+                    self.status_login.config(text="❌ Deslogado", fg='#ff6b6b')
+
             except Exception as e:
                 erro = str(e)
-                self.log(f"❌ Erro: {erro}")
+                self.log(f"❌ Erro no login: {erro}")
                 self.status_login.config(text="❌ Falha", fg='#ff6b6b')
                 
                 if "Checkpoint" in erro:
-                    match = re.search(r'/auth_platform/\?apc=[^\s]+', erro)
-                    if match:
-                        link = f"https://www.instagram.com{match.group(0)}"
-                        self.log(f"🔗 Abra no navegador e confirme:")
-                        self.log(f"{link}")
-                        
-                        # Copia o link pra área de transferência
-                        self.root.clipboard_clear()
-                        self.root.clipboard_append(link)
-                        self.log("📋 Link copiado para a área de transferência!")
-                        
-                        self.root.after(0, lambda: messagebox.showwarning(
-                            "Checkpoint necessário",
-                            f"O link foi copiado para sua área de transferência!\n\nCole no navegador e confirme.\n\nDepois clique em 'OK' e tente novamente."
-                        ))
-                else:
-                    self.root.after(0, lambda: messagebox.showerror(
-                        "Erro no login",
-                        f"{erro}"
-                    ))
-        
+                    self.log("⚠️ O Instagram ainda pede verificação.")
+                    self.log("💡 Abra o Edge, faça login manualmente e DEIXE ABERTO.")
+                    self.log("🔄 Depois feche e abra este programa novamente.")
+
         threading.Thread(target=thread_login, daemon=True).start()
     
     def criar_interface(self):
-        titulo = tk.Label(
-            self.root,
-            text="📸 Baixador do Instagram",
-            font=("Segoe UI", 20, "bold"),
-            bg='#1a1a2e',
-            fg='#e1306c'
-        )
-        titulo.pack(pady=(20, 5))
+        titulo = tk.Label(self.root, text="📸 Baixador do Instagram", font=("Segoe UI", 20, "bold"), bg='#1a1a2e', fg='#e1306c')
+        titulo.pack(pady=20)
         
-        subtitulo = tk.Label(
-            self.root,
-            text=f"👤 @{USUARIO_INSTAGRAM}  |  Login automático ativado",
-            font=("Segoe UI", 10),
-            bg='#1a1a2e',
-            fg='#25d366'
-        )
-        subtitulo.pack(pady=(0, 20))
+        self.status_login = tk.Label(self.root, text="⏳ Conectando...", bg='#1a1a2e', fg='#ffaa00', font=("Segoe UI", 10))
+        self.status_login.pack()
         
-        main_frame = tk.Frame(self.root, bg='#1a1a2e')
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=30)
+        main = tk.Frame(self.root, bg='#1a1a2e')
+        main.pack(fill=tk.BOTH, expand=True, padx=30, pady=20)
         
-        login_frame = tk.LabelFrame(
-            main_frame,
-            text="🔐 Status do Login",
-            font=("Segoe UI", 10, "bold"),
-            bg='#16213e',
-            fg='#ffffff',
-            padx=10,
-            pady=10
-        )
-        login_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        row1 = tk.Frame(login_frame, bg='#16213e')
-        row1.pack(fill=tk.X, pady=(0, 5))
-        
-        tk.Label(row1, text="Usuário:", bg='#16213e', fg='#ffffff', width=10, anchor='w').pack(side=tk.LEFT)
-        self.user_entry = tk.Entry(row1, width=25, bg='#2a2a4a', fg='#25d366', insertbackground='white')
-        self.user_entry.insert(0, USUARIO_INSTAGRAM)
-        self.user_entry.config(state='readonly')
-        self.user_entry.pack(side=tk.LEFT, padx=(0, 10))
-        
-        row2 = tk.Frame(login_frame, bg='#16213e')
-        row2.pack(fill=tk.X)
-        
-        tk.Label(row2, text="Senha:", bg='#16213e', fg='#ffffff', width=10, anchor='w').pack(side=tk.LEFT)
-        self.pass_entry = tk.Entry(row2, width=25, show="*", bg='#2a2a4a', fg='white', insertbackground='white')
-        if SENHA_INSTAGRAM:
-            self.pass_entry.insert(0, SENHA_INSTAGRAM)
-        self.pass_entry.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.login_btn = tk.Button(
-            row2,
-            text="🔑 Logar",
-            command=self.fazer_login_manual,
-            bg='#25d366',
-            fg='white',
-            font=("Segoe UI", 9, "bold"),
-            cursor="hand2",
-            width=10
-        )
-        self.login_btn.pack(side=tk.LEFT)
-        
-        self.status_login = tk.Label(
-            row2,
-            text="⏳ Conectando...",
-            bg='#16213e',
-            fg='#ffaa00',
-            font=("Segoe UI", 9)
-        )
-        self.status_login.pack(side=tk.LEFT, padx=(15, 0))
-        
-        link_frame = tk.LabelFrame(
-            main_frame,
-            text="📎 Link do post ou perfil",
-            font=("Segoe UI", 10, "bold"),
-            bg='#16213e',
-            fg='#ffffff',
-            padx=10,
-            pady=10
-        )
-        link_frame.pack(fill=tk.X, pady=(0, 15))
-        
-        self.url_entry = tk.Entry(
-            link_frame,
-            font=("Segoe UI", 11),
-            bg='#2a2a4a',
-            fg='white',
-            insertbackground='white'
-        )
+        tk.Label(main, text="Link do Post ou Perfil:", bg='#1a1a2e', fg='white').pack(anchor='w')
+        self.url_entry = tk.Entry(main, bg='#2a2a4a', fg='white', insertbackground='white', font=("Segoe UI", 11))
         self.url_entry.pack(fill=tk.X, pady=(0, 10))
-        self.url_entry.insert(0, "https://www.instagram.com/p/...")
-        self.url_entry.bind("<FocusIn>", lambda e: self.url_entry.delete(0, tk.END) if self.url_entry.get() == "https://www.instagram.com/p/..." else None)
+        self.url_entry.insert(0, "https://www.instagram.com/p/... ou @usuario")
         
-        self.download_btn = tk.Button(
-            link_frame,
-            text="⬇️ BAIXAR",
-            command=self.iniciar_download,
-            bg='#e1306c',
-            fg='white',
-            font=("Segoe UI", 12, "bold"),
-            height=1,
-            cursor="hand2"
-        )
-        self.download_btn.pack(fill=tk.X)
+        frame_pasta = tk.Frame(main, bg='#1a1a2e')
+        frame_pasta.pack(fill=tk.X, pady=(0, 10))
         
-        options_frame = tk.Frame(main_frame, bg='#1a1a2e')
-        options_frame.pack(fill=tk.X, pady=(0, 10))
+        tk.Label(frame_pasta, text="Pasta:", bg='#1a1a2e', fg='white').pack(side=tk.LEFT)
+        self.pasta_entry = tk.Entry(frame_pasta, bg='#2a2a4a', fg='white', insertbackground='white')
+        self.pasta_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 5))
+        self.pasta_entry.insert(0, "downloads")
         
-        self.var_pasta = tk.StringVar(value="downloads")
+        tk.Button(frame_pasta, text="📂", command=self.escolher_pasta, bg='#2a2a4a', fg='white', relief='flat').pack(side=tk.RIGHT)
         
-        tk.Label(
-            options_frame,
-            text="📁 Pasta:",
-            bg='#1a1a2e',
-            fg='#ffffff'
-        ).pack(side=tk.LEFT, padx=(0, 5))
+        self.download_btn = tk.Button(main, text="⬇️ BAIXAR", command=self.iniciar_download, bg='#e1306c', fg='white', font=("Segoe UI", 12, "bold"), relief='flat', cursor='hand2')
+        self.download_btn.pack(fill=tk.X, pady=10)
         
-        self.pasta_entry = tk.Entry(
-            options_frame,
-            textvariable=self.var_pasta,
-            width=30,
-            bg='#2a2a4a',
-            fg='white',
-            insertbackground='white'
-        )
-        self.pasta_entry.pack(side=tk.LEFT, padx=(0, 5))
-        
-        tk.Button(
-            options_frame,
-            text="📂",
-            command=self.escolher_pasta,
-            bg='#2a2a4a',
-            fg='white',
-            cursor="hand2"
-        ).pack(side=tk.LEFT)
-        
-        log_frame = tk.LabelFrame(
-            main_frame,
-            text="📋 Log",
-            font=("Segoe UI", 10, "bold"),
-            bg='#16213e',
-            fg='#ffffff',
-            padx=10,
-            pady=10
-        )
-        log_frame.pack(fill=tk.BOTH, expand=True)
-        
-        self.log_text = scrolledtext.ScrolledText(
-            log_frame,
-            bg='#0d0d1a',
-            fg='#00ff88',
-            font=("Consolas", 10),
-            height=10,
-            wrap=tk.WORD
-        )
+        self.log_text = scrolledtext.ScrolledText(main, bg='#0d0d1a', fg='#00ff88', font=("Consolas", 10), height=12)
         self.log_text.pack(fill=tk.BOTH, expand=True)
         self.log_text.config(state=tk.DISABLED)
         
         self.log("🚀 Aplicação iniciada!")
-        self.log(f"👤 Usuário: @{USUARIO_INSTAGRAM}")
-        self.log("🔄 Tentando login automático...")
+        self.log("📌 Cole o link do post, reels, ou @usuario e clique em Baixar")
     
-    def log(self, mensagem):
+    def log(self, msg):
         self.log_text.config(state=tk.NORMAL)
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.log_text.insert(tk.END, f"[{timestamp}] {mensagem}\n")
+        self.log_text.insert(tk.END, f"[{datetime.now().strftime('%H:%M:%S')}] {msg}\n")
         self.log_text.see(tk.END)
         self.log_text.config(state=tk.DISABLED)
         self.root.update()
     
     def escolher_pasta(self):
-        pasta = filedialog.askdirectory(title="Selecionar pasta para downloads")
+        pasta = filedialog.askdirectory()
         if pasta:
-            self.var_pasta.set(pasta)
-            self.log(f"📁 Pasta alterada: {pasta}")
-    
-    def fazer_login_manual(self):
-        usuario = self.user_entry.get().strip()
-        senha = self.pass_entry.get().strip()
-        
-        if not senha:
-            messagebox.showwarning("Aviso", "Digite sua senha!")
-            return
-        
-        def login_thread():
-            try:
-                self.log(f"🔐 Tentando login como {usuario}...")
-                self.loader.login(usuario, senha)
-                self.logado = True
-                self.loader.save_session_to_file()
-                self.status_login.config(text="✅ Logado!", fg='#25d366')
-                self.log("✅ Login realizado com sucesso!")
-                self.log("💾 Sessão salva!")
-                messagebox.showinfo("Sucesso", "Login realizado com sucesso!")
-            except Exception as e:
-                self.log(f"❌ Erro: {str(e)}")
-                self.status_login.config(text="❌ Falha", fg='#ff6b6b')
-                messagebox.showerror("Erro", f"Falha no login:\n{str(e)}")
-        
-        threading.Thread(target=login_thread, daemon=True).start()
-    
-    def extrair_shortcode(self, url):
-        padroes = [
-            r'instagram\.com/p/([A-Za-z0-9_-]+)',
-            r'instagram\.com/reel/([A-Za-z0-9_-]+)',
-            r'instagram\.com/tv/([A-Za-z0-9_-]+)'
-        ]
-        for padrao in padroes:
-            match = re.search(padrao, url)
-            if match:
-                return match.group(1)
-        return None
-    
-    def extrair_usuario(self, url):
-        match = re.search(r'instagram\.com/([A-Za-z0-9_.]+)', url)
-        if match:
-            return match.group(1)
-        return None
-    
-    def baixar_perfil(self, usuario, pasta):
-        self.log(f"👤 Baixando perfil: {usuario}")
-        self.log("⏳ Isso pode levar alguns minutos...")
-        
-        try:
-            perfil = instaloader.Profile.from_username(self.loader.context, usuario)
-            self.log(f"📊 Posts: {perfil.mediacount}")
-            
-            count = 0
-            for post in perfil.get_posts():
-                count += 1
-                self.log(f"📥 Baixando post {count}/{perfil.mediacount}...")
-                self.loader.download_post(post, target=pasta)
-            
-            self.log(f"✅ Perfil completo baixado! Total: {count} posts")
-            return True
-            
-        except LoginRequiredException:
-            self.log("❌ Perfil privado! Faça login para acessar.")
-            return False
-        except Exception as e:
-            self.log(f"❌ Erro: {str(e)}")
-            return False
+            self.pasta_entry.delete(0, tk.END)
+            self.pasta_entry.insert(0, pasta)
     
     def iniciar_download(self):
-        url = self.url_entry.get().strip()
-        
-        if not url or url == "https://www.instagram.com/p/...":
-            messagebox.showwarning("Aviso", "Cole um link válido do Instagram!")
+        entrada = self.url_entry.get().strip()
+        if not entrada or entrada in ["https://www.instagram.com/p/... ou @usuario", "https://www.instagram.com/p/..."]:
+            messagebox.showwarning("Aviso", "Cole um link ou usuário válido!")
             return
         
-        pasta = self.var_pasta.get()
+        # Verifica se é um perfil (@usuario)
+        usuario = re.search(r'@([A-Za-z0-9_.]+)', entrada)
+        if not usuario:
+            usuario = re.search(r'instagram\.com/([A-Za-z0-9_.]+)', entrada)
+            if usuario:
+                usuario = usuario.group(1)
+        else:
+            usuario = usuario.group(1)
+        
+        # Verifica se é um shortcode (post individual)
+        shortcode = re.search(r'instagram\.com/(p|reel|tv)/([A-Za-z0-9_-]+)', entrada)
+        if shortcode:
+            shortcode = shortcode.group(2)
+        
+        pasta = self.pasta_entry.get().strip()
         if not os.path.exists(pasta):
             os.makedirs(pasta)
-            self.log(f"📁 Pasta criada: {pasta}")
-        
-        usuario = self.extrair_usuario(url)
-        if usuario and not re.search(r'/p/|/reel/|/tv/', url):
-            self.download_btn.config(state=tk.DISABLED, text="⏳ Baixando perfil...")
-            
-            def thread_perfil():
-                sucesso = self.baixar_perfil(usuario, pasta)
-                self.root.after(0, lambda: self.download_btn.config(state=tk.NORMAL, text="⬇️ BAIXAR"))
-                if sucesso:
-                    self.root.after(0, lambda: messagebox.showinfo("Sucesso!", f"Perfil {usuario} baixado com sucesso!"))
-            
-            threading.Thread(target=thread_perfil, daemon=True).start()
-            return
-        
-        shortcode = self.extrair_shortcode(url)
-        if not shortcode:
-            messagebox.showerror("Erro", "URL inválida!\nUse:\n- instagram.com/p/...\n- instagram.com/reel/...")
-            return
         
         self.download_btn.config(state=tk.DISABLED, text="⏳ Baixando...")
-        self.log(f"🎯 Iniciando download: {shortcode}")
         
-        def download_thread():
+        def thread():
             try:
-                post = instaloader.Post.from_shortcode(self.loader.context, shortcode)
-                self.loader.dirname_pattern = pasta
-                self.loader.download_post(post, target=pasta)
+                # Se for um perfil
+                if usuario and not shortcode:
+                    self.log(f"👤 Baixando perfil: {usuario}")
+                    perfil = instaloader.Profile.from_username(self.loader.context, usuario)
+                    count = 0
+                    for post in perfil.get_posts():
+                        count += 1
+                        self.log(f"📥 Baixando post {count}/{perfil.mediacount}...")
+                        self.loader.download_post(post, target=pasta)
+                    self.log("✅ Perfil baixado!")
+                    messagebox.showinfo("Sucesso", f"Perfil {usuario} baixado!")
                 
-                self.log(f"✅ Download concluído!")
-                self.log(f"📁 Arquivos salvos em: {pasta}")
-                self.log(f"📊 Tipo: {post.typename}")
+                # Se for post único
+                elif shortcode:
+                    self.log(f"🎯 Baixando post: {shortcode}")
+                    post = instaloader.Post.from_shortcode(self.loader.context, shortcode)
+                    self.loader.dirname_pattern = pasta
+                    self.loader.download_post(post, target=pasta)
+                    self.log("✅ Download concluído!")
+                    messagebox.showinfo("Sucesso", "Download concluído!")
                 
-                self.root.after(0, lambda: messagebox.showinfo(
-                    "Sucesso!",
-                    f"Download concluído!\n📁 Pasta: {pasta}\n📊 Tipo: {post.typename}"
-                ))
+                else:
+                    raise ValueError("Link ou usuário não reconhecido.")
                 
-            except LoginRequiredException:
-                self.log("❌ Conteúdo privado! Faça login para acessar.")
-                self.root.after(0, lambda: messagebox.showwarning(
-                    "Login necessário",
-                    "Este post é privado.\nFaça login para baixar."
-                ))
-                
+            except instaloader.LoginRequiredException:
+                self.log("❌ Privado. Faça login manualmente no Edge e tente de novo.")
+                messagebox.showerror("Erro", "Conteúdo privado. Faça login no Edge e tente novamente.")
             except Exception as e:
                 self.log(f"❌ Erro: {str(e)}")
-                self.root.after(0, lambda: messagebox.showerror("Erro", f"Falha no download:\n{str(e)}"))
-            
+                messagebox.showerror("Erro", str(e))
             finally:
-                self.root.after(0, lambda: self.download_btn.config(state=tk.NORMAL, text="⬇️ BAIXAR"))
+                self.download_btn.config(state=tk.NORMAL, text="⬇️ BAIXAR")
         
-        threading.Thread(target=download_thread, daemon=True).start()
+        threading.Thread(target=thread, daemon=True).start()
 
 if __name__ == "__main__":
     root = tk.Tk()
