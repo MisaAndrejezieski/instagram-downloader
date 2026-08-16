@@ -7,6 +7,11 @@ from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 import instaloader
 
+# ============================================
+# SEU USUÁRIO AQUI - FIXO NO CÓDIGO
+# ============================================
+USUARIO_INSTAGRAM = "misaelandrejezieski"
+SENHA_INSTAGRAM = ""  # VOCÊ DIGITA NA INTERFACE
 
 class InstagramDownloader:
     def __init__(self, root):
@@ -16,7 +21,6 @@ class InstagramDownloader:
         self.root.resizable(False, False)
         self.root.configure(bg='#1a1a2e')
         
-        # Inicializa o instaloader
         self.loader = instaloader.Instaloader()
         self.logado = False
         
@@ -35,21 +39,20 @@ class InstagramDownloader:
         
         subtitulo = tk.Label(
             self.root,
-            text="Baixe fotos, vídeos, reels e stories",
+            text=f"Logado como: @{USUARIO_INSTAGRAM}",
             font=("Segoe UI", 10),
             bg='#1a1a2e',
-            fg='#a0a0b0'
+            fg='#25d366'
         )
         subtitulo.pack(pady=(0, 20))
         
-        # Frame principal
         main_frame = tk.Frame(self.root, bg='#1a1a2e')
         main_frame.pack(fill=tk.BOTH, expand=True, padx=30)
         
         # ========== ÁREA DE LOGIN ==========
         login_frame = tk.LabelFrame(
             main_frame,
-            text="🔐 Login (opcional - para conteúdo privado)",
+            text="🔐 Login (necessário para perfis privados)",
             font=("Segoe UI", 10, "bold"),
             bg='#16213e',
             fg='#ffffff',
@@ -58,12 +61,14 @@ class InstagramDownloader:
         )
         login_frame.pack(fill=tk.X, pady=(0, 15))
         
-        # Usuário
+        # Usuário fixo (só leitura)
         row1 = tk.Frame(login_frame, bg='#16213e')
         row1.pack(fill=tk.X, pady=(0, 5))
         
         tk.Label(row1, text="Usuário:", bg='#16213e', fg='#ffffff', width=10, anchor='w').pack(side=tk.LEFT)
-        self.user_entry = tk.Entry(row1, width=25, bg='#2a2a4a', fg='white', insertbackground='white')
+        self.user_entry = tk.Entry(row1, width=25, bg='#2a2a4a', fg='#25d366', insertbackground='white')
+        self.user_entry.insert(0, USUARIO_INSTAGRAM)
+        self.user_entry.config(state='readonly')
         self.user_entry.pack(side=tk.LEFT, padx=(0, 10))
         
         # Senha
@@ -98,7 +103,7 @@ class InstagramDownloader:
         # ========== ÁREA DO LINK ==========
         link_frame = tk.LabelFrame(
             main_frame,
-            text="📎 Link do post",
+            text="📎 Link do post ou perfil",
             font=("Segoe UI", 10, "bold"),
             bg='#16213e',
             fg='#ffffff',
@@ -163,7 +168,7 @@ class InstagramDownloader:
             cursor="hand2"
         ).pack(side=tk.LEFT)
         
-        # ========== LOG DE SAÍDA ==========
+        # ========== LOG ==========
         log_frame = tk.LabelFrame(
             main_frame,
             text="📋 Log",
@@ -187,7 +192,8 @@ class InstagramDownloader:
         self.log_text.config(state=tk.DISABLED)
         
         self.log("🚀 Aplicação iniciada!")
-        self.log("📌 Cole o link do Instagram e clique em Baixar")
+        self.log(f"👤 Usuário configurado: @{USUARIO_INSTAGRAM}")
+        self.log("📌 Digite a senha e clique em Logar")
         
     def log(self, mensagem):
         self.log_text.config(state=tk.NORMAL)
@@ -207,8 +213,8 @@ class InstagramDownloader:
         usuario = self.user_entry.get().strip()
         senha = self.pass_entry.get().strip()
         
-        if not usuario or not senha:
-            messagebox.showwarning("Aviso", "Preencha usuário e senha!")
+        if not senha:
+            messagebox.showwarning("Aviso", "Digite sua senha!")
             return
         
         def login_thread():
@@ -218,6 +224,7 @@ class InstagramDownloader:
                 self.logado = True
                 self.status_login.config(text="✅ Logado!", fg='#25d366')
                 self.log("✅ Login realizado com sucesso!")
+                self.log("📥 Agora você pode baixar posts de qualquer perfil!")
                 messagebox.showinfo("Sucesso", "Login realizado com sucesso!")
             except Exception as e:
                 self.log(f"❌ Erro no login: {str(e)}")
@@ -239,6 +246,39 @@ class InstagramDownloader:
                 return match.group(1)
         return None
     
+    def extrair_usuario(self, url):
+        match = re.search(r'instagram\.com/([A-Za-z0-9_.]+)', url)
+        if match:
+            return match.group(1)
+        return None
+    
+    def baixar_perfil(self, usuario, pasta):
+        self.log(f"👤 Baixando perfil: {usuario}")
+        self.log("⏳ Isso pode levar alguns minutos...")
+        
+        try:
+            perfil = instaloader.Profile.from_username(self.loader.context, usuario)
+            
+            self.log(f"📊 Posts: {perfil.mediacount}")
+            self.log(f"👥 Seguidores: {perfil.followers}")
+            self.log(f"📸 Seguindo: {perfil.followees}")
+            
+            count = 0
+            for post in perfil.get_posts():
+                count += 1
+                self.log(f"📥 Baixando post {count}/{perfil.mediacount}...")
+                self.loader.download_post(post, target=pasta)
+            
+            self.log(f"✅ Perfil completo baixado! Total: {count} posts")
+            return True
+            
+        except instaloader.exceptions.LoginRequiredException:
+            self.log("❌ Perfil privado! Faça login para acessar.")
+            return False
+        except Exception as e:
+            self.log(f"❌ Erro ao baixar perfil: {str(e)}")
+            return False
+    
     def iniciar_download(self):
         url = self.url_entry.get().strip()
         
@@ -246,9 +286,30 @@ class InstagramDownloader:
             messagebox.showwarning("Aviso", "Cole um link válido do Instagram!")
             return
         
+        pasta = self.var_pasta.get()
+        if not os.path.exists(pasta):
+            os.makedirs(pasta)
+            self.log(f"📁 Pasta criada: {pasta}")
+        
+        # Verifica se é um perfil
+        usuario = self.extrair_usuario(url)
+        if usuario and not re.search(r'/p/|/reel/|/tv/', url):
+            # É um perfil
+            self.download_btn.config(state=tk.DISABLED, text="⏳ Baixando perfil...")
+            
+            def thread_perfil():
+                sucesso = self.baixar_perfil(usuario, pasta)
+                self.root.after(0, lambda: self.download_btn.config(state=tk.NORMAL, text="⬇️ BAIXAR"))
+                if sucesso:
+                    self.root.after(0, lambda: messagebox.showinfo("Sucesso!", f"Perfil {usuario} baixado com sucesso!"))
+            
+            threading.Thread(target=thread_perfil, daemon=True).start()
+            return
+        
+        # Se não for perfil, tenta baixar post único
         shortcode = self.extrair_shortcode(url)
         if not shortcode:
-            messagebox.showerror("Erro", "URL inválida!\nUse links como:\n- instagram.com/p/...\n- instagram.com/reel/...")
+            messagebox.showerror("Erro", "URL inválida!\nUse:\n- instagram.com/p/...\n- instagram.com/reel/...")
             return
         
         self.download_btn.config(state=tk.DISABLED, text="⏳ Baixando...")
@@ -256,14 +317,7 @@ class InstagramDownloader:
         
         def download_thread():
             try:
-                pasta = self.var_pasta.get()
-                if not os.path.exists(pasta):
-                    os.makedirs(pasta)
-                    self.log(f"📁 Pasta criada: {pasta}")
-                
                 post = instaloader.Post.from_shortcode(self.loader.context, shortcode)
-                
-                # Salva na pasta escolhida
                 self.loader.dirname_pattern = pasta
                 self.loader.download_post(post, target=pasta)
                 
