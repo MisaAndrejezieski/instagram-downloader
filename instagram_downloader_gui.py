@@ -1,18 +1,30 @@
 import os
-import re
-import subprocess
 import threading
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, scrolledtext
 
+import instaloader
+
 
 class InstagramDownloader:
     def __init__(self, root):
         self.root = root
-        self.root.title("📸 Baixador Instagram (Sem Senha)")
+        self.root.title("📸 Baixador Instagram (Imagens e Vídeos)")
         self.root.geometry("700x550")
         self.root.configure(bg='#1a1a2e')
+        
+        # Inicializa o Instaloader
+        self.loader = instaloader.Instaloader(
+            download_pictures=True,
+            download_videos=True,
+            download_video_thumbnails=False,
+            download_geotags=False,
+            download_comments=False,
+            save_metadata=False,
+            compress_json=False
+        )
+        
         self.criar_interface()
         
     def criar_interface(self):
@@ -51,8 +63,8 @@ class InstagramDownloader:
         self.log_text.pack(fill=tk.BOTH, expand=True)
         self.log_text.config(state=tk.DISABLED)
         
-        self.log("🚀 Aplicação iniciada (sem senha).")
-        self.log("📌 Cole o link e dê Enter.")
+        self.log("🚀 Aplicação iniciada.")
+        self.log("📌 Cole o link do post (imagem ou vídeo) e dê Enter.")
         
         self.url_entry.bind('<Return>', self.evento_enter)
         
@@ -82,29 +94,30 @@ class InstagramDownloader:
             self.log("⚠️ Cole um link válido!")
             return
         
+        # Extrai o shortcode do link (ex: DaL3EAECiUx)
+        try:
+            shortcode = url.split("/p/")[1].split("/")[0]
+        except IndexError:
+            self.log("❌ Link inválido. Use o formato: https://www.instagram.com/p/CODIGO/")
+            return
+        
         pasta = self.pasta_entry.get().strip()
         if not os.path.exists(pasta):
             os.makedirs(pasta)
         
         self.download_btn.config(state=tk.DISABLED, text="⏳ Baixando...")
-        self.log(f"🎯 Baixando: {url}")
+        self.log(f"🎯 Baixando post: {shortcode}")
         
         def thread():
             try:
-                # O comando que SEMPRE funcionou pra você
-                comando = [
-                    "yt-dlp",
-                    "--no-playlist",
-                    "--output", os.path.join(pasta, "%(title)s.%(ext)s"),
-                    url
-                ]
+                # Define o diretório de destino
+                self.loader.dirname_pattern = pasta
                 
-                resultado = subprocess.run(comando, capture_output=True, text=True)
+                # Baixa o post
+                post = instaloader.Post.from_shortcode(self.loader.context, shortcode)
+                self.loader.download_post(post, target=pasta)
                 
-                if resultado.returncode == 0:
-                    self.log("✅ Download concluído com sucesso!")
-                else:
-                    self.log(f"❌ Erro: {resultado.stderr}")
+                self.log("✅ Download concluído com sucesso!")
                     
             except Exception as e:
                 self.log(f"❌ Erro: {str(e)}")
